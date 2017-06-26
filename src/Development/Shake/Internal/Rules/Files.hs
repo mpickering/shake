@@ -5,8 +5,11 @@ module Development.Shake.Internal.Rules.Files(
     (&?>), (&%>), defaultRuleFiles
     ) where
 
+import Control.DeepSeq (force)
 import Control.Monad
 import Control.Monad.IO.Class
+import qualified Data.Digest.Pure.SHA as SHA
+import qualified Data.ByteString.Lazy.Char8 as LBS
 import Data.Maybe
 import Data.List.Extra
 import Control.Applicative
@@ -60,7 +63,7 @@ defaultRuleFiles :: Rules ()
 defaultRuleFiles = do
     opts <- getShakeOptionsRules
     -- A rule from FilesQ to FilesA. The result value is only useful for linting.
-    addBuiltinRuleEx (ruleLint opts) (ruleRun opts $ shakeRebuildApply opts)
+    addBuiltinRuleEx (ruleLint opts) ruleSummary (ruleRun opts $ shakeRebuildApply opts)
 
 ruleLint :: ShakeOptions -> BuiltinLint FilesQ FilesA
 ruleLint opts k (FilesA []) = return Nothing -- in the case of disabling lint
@@ -106,6 +109,13 @@ ruleRun opts rebuildFlags k o@(fmap getEx -> old) dirtyChildren = do
             let c | Just old <- old, filesEqualValue opts old v /= NotEqual = ChangedRecomputeSame
                     | otherwise = ChangedRecomputeDiff
             return $ RunResult c (runBuilder $ putEx v) v
+
+ruleSummary :: BuiltinSummary FilesQ FilesA
+ruleSummary (FilesQ ks) _ = do
+            hashes <- forM ks $ \(FileQ k) -> do
+                str <- LBS.readFile (fileNameToString k)
+                return $ SHA.showDigest $ SHA.sha256 str
+            return $ force $ SHA.showDigest $ SHA.sha256 $ LBS.pack $ show hashes
 
 
 

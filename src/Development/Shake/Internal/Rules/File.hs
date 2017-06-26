@@ -12,12 +12,15 @@ module Development.Shake.Internal.Rules.File(
     ) where
 
 import Control.Applicative
+import Control.DeepSeq (force)
 import Control.Monad.Extra
 import Control.Monad.IO.Class
 import Data.Typeable
 import Data.List
 import Data.Maybe
+import qualified Data.Digest.Pure.SHA as SHA
 import qualified Data.ByteString.Char8 as BS
+import qualified Data.ByteString.Lazy.Char8 as LBS
 import qualified Data.HashSet as Set
 import Foreign.Storable
 import Data.Word
@@ -189,7 +192,7 @@ defaultRuleFile :: Rules ()
 defaultRuleFile = do
     opts@ShakeOptions{..} <- getShakeOptionsRules
     -- A rule from FileQ to (Maybe FileA). The result value is only useful for linting.
-    addBuiltinRuleEx (ruleLint opts) (ruleRun opts $ shakeRebuildApply opts)
+    addBuiltinRuleEx (ruleLint opts) ruleSummary (ruleRun opts $ shakeRebuildApply opts)
 
 ruleLint :: ShakeOptions -> BuiltinLint FileQ FileR
 ruleLint opts k (FileR Nothing _) = return Nothing
@@ -199,6 +202,11 @@ ruleLint opts k (FileR (Just v) _) = do
         Nothing -> Just "<missing>"
         Just now | fileEqualValue opts v now == EqualCheap -> Nothing
                  | otherwise -> Just $ show now
+
+ruleSummary :: BuiltinSummary FileQ FileR
+ruleSummary (FileQ k) _ = do
+  str <- LBS.readFile (fileNameToString k)
+  return $! force $ SHA.showDigest $ SHA.sha256 str
 
 ruleRun :: ShakeOptions -> (FilePath -> Rebuild) -> BuiltinRun FileQ FileR
 ruleRun opts@ShakeOptions{..} rebuildFlags o@(FileQ x) oldBin@(fmap getEx -> old) dirtyChildren = do
@@ -292,6 +300,7 @@ ruleRun opts@ShakeOptions{..} rebuildFlags o@(FileQ x) oldBin@(fmap getEx -> old
 
 apply_ :: (a -> FileName) -> [a] -> Action [FileR]
 apply_ f = apply . map (FileQ . f)
+
 
 
 -- | Has a file changed. This function will only give the correct answer if called in the rule

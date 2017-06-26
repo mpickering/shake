@@ -94,7 +94,8 @@ library
         time,
         transformers >= 0.2,
         unordered-containers >= 0.2.7,
-        utf8-string >= 0.3
+        utf8-string >= 0.3,
+        SHA
 
     if flag(portable)
         cpp-options: -DPORTABLE
@@ -116,6 +117,7 @@ library
         Development.Shake.Config
         Development.Shake.FilePath
         Development.Shake.Forward
+        Development.Shake.Memo
         Development.Shake.Rule
         Development.Shake.Util
 
@@ -142,6 +144,9 @@ library
         Development.Shake.Internal.FileName
         Development.Shake.Internal.FilePattern
         Development.Shake.Internal.Options
+        Development.Shake.Internal.Core.Monad
+        Development.Shake.Internal.Core.Pool
+        Development.Shake.Internal.Memo
         Development.Shake.Internal.Profile
         Development.Shake.Internal.Progress
         Development.Shake.Internal.Resource
@@ -198,7 +203,8 @@ executable shake
         time,
         transformers >= 0.2,
         unordered-containers >= 0.2.7,
-        utf8-string >= 0.3
+        utf8-string >= 0.3,
+        SHA
 
     if flag(portable)
         cpp-options: -DPORTABLE
@@ -241,6 +247,9 @@ executable shake
         Development.Shake.Internal.FileName
         Development.Shake.Internal.FilePattern
         Development.Shake.Internal.Options
+        Development.Shake.Internal.Memo
+        Development.Shake.Internal.Core.Monad
+        Development.Shake.Internal.Core.Pool
         Development.Shake.Internal.Profile
         Development.Shake.Internal.Progress
         Development.Shake.Internal.Resource

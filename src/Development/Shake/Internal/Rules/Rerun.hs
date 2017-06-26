@@ -39,5 +39,8 @@ alwaysRerun = apply1 $ AlwaysRerunQ ()
 
 defaultRuleRerun :: Rules ()
 defaultRuleRerun =
-    addBuiltinRuleEx noLint $
+    let stateSummary _ _ = error $
+            "An attempt has been made to take the state of alwaysRerun. " ++
+            "Perhaps you tried to memoize a rule that depends on alwaysRerun?"
+    in addBuiltinRuleEx noLint stateSummary $
         \AlwaysRerunQ{} _ _ -> return $ RunResult ChangedRecomputeDiff BS.empty ()

@@ -5,9 +5,9 @@
 module Development.Shake.Internal.Core.Database(
     Trace(..), newTrace,
     Database, withDatabase, assertFinishedDatabase,
-    listDepends, lookupDependencies, lookupStatus,
-    BuildKey(..), build,
     Depends, nubDepends,
+    listDepends, lookupValue, lookupDependencies, lookupStatus,
+    BuildKey(..), build,
     Step, Result(..),
     progress,
     Stack, emptyStack, topStack, showStack, showTopStack,
@@ -449,6 +449,13 @@ listLive Database{..} = do
     status <- Ids.toList status
     return [k | (_, (k, Ready{})) <- status]
 
+lookupValue :: Database -> Key -> IO Value
+lookupValue Database{..} k = do
+    withLock lock $ do
+        intern <- readIORef intern
+        let Just i = Intern.lookup k intern
+        Just (_, Ready r) <- Ids.lookup status i
+        return $ result r
 
 listDepends :: Database -> Depends -> IO [Key]
 listDepends Database{..} (Depends xs) =

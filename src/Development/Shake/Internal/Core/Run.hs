@@ -89,6 +89,7 @@ run opts@ShakeOptions{..} rs = (if shakeLineBuffering then withLineBuffering els
 
     after <- newIORef []
     absent <- newIORef []
+    cacheRef <- newIORef Map.empty
     withCleanup $ \cleanup -> do
         addCleanup_ cleanup $ do
             when (shakeTimings && shakeVerbosity >= Normal) printTimings
@@ -109,7 +110,7 @@ run opts@ShakeOptions{..} rs = (if shakeLineBuffering then withLineBuffering els
 
                 addTiming "Running rules"
                 runPool (shakeThreads == 1) shakeThreads $ \pool -> do
-                    let s0 = Global database pool cleanup start ruleinfo output opts diagnostic curdir after absent getProgress userRules
+                    let s0 = Global database pool cleanup start ruleinfo output opts diagnostic curdir after absent getProgress userRules cacheRef
                     let s1 = newLocal emptyStack shakeVerbosity
                     forM_ actions $ \act ->
                         addPoolStart pool $ runAction s0 s1 act $ \x -> case x of

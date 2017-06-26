@@ -6,7 +6,9 @@ module General.Binary(
     Builder(..), runBuilder, sizeBuilder,
     BinaryEx(..),
     putExStorable, getExStorable, putExStorableList, getExStorableList,
-    putExList, getExList, putExN, getExN
+    putExList, getExList, putExN, getExN,
+    encodeEx
+
     ) where
 
 import Control.Monad
@@ -68,6 +70,9 @@ sizeBuilder (Builder i _) = i
 
 runBuilder :: Builder -> BS.ByteString
 runBuilder (Builder i f) = unsafePerformIO $ BS.create i $ \ptr -> f ptr 0
+
+encodeEx :: BinaryEx a => a -> BS.ByteString
+encodeEx = runBuilder . putEx
 
 instance Semigroup Builder where
     (Builder x1 x2) <> (Builder y1 y2) = Builder (x1+y1) $ \p i -> do x2 p i; y2 p $ i+x1

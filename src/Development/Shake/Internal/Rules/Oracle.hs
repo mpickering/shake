@@ -14,6 +14,7 @@ import Development.Shake.Classes
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import Data.Binary
+import General.Binary
 import Control.Applicative
 import Prelude
 
@@ -22,7 +23,7 @@ import Prelude
 newtype OracleQ question = OracleQ question
     deriving (Show,Typeable,Eq,Hashable,Binary,NFData)
 newtype OracleA answer = OracleA answer
-    deriving (Show,Typeable,Eq,Hashable,Binary,NFData)
+    deriving (Show,Typeable,Eq,Hashable,Binary, BinaryEx, NFData)
 
 type instance RuleResult (OracleQ a) = OracleA (RuleResult a)
 
@@ -81,13 +82,13 @@ type instance RuleResult (OracleQ a) = OracleA (RuleResult a)
 --
 --   Using these definitions, any rule depending on the version of @shake@
 --   should call @getPkgVersion $ GhcPkgVersion \"shake\"@ to rebuild when @shake@ is upgraded.
-addOracle :: (RuleResult q ~ a, ShakeValue q, ShakeValue a) => (q -> Action a) -> Rules (q -> Action a)
+addOracle :: (RuleResult q ~ a, BinaryEx a, ShakeValue q, ShakeValue a) => (q -> Action a) -> Rules (q -> Action a)
 addOracle act = do
         -- rebuild is automatic for oracles, skip just means we don't rebuild
         opts <- getShakeOptionsRules
         let skip = shakeRebuildApply opts "" == RebuildLater
 
-        addBuiltinRule noLint $ \(OracleQ q) old _ -> case old of
+        addBuiltinRule noLint binarySummary $ \(OracleQ q) old _ -> case old of
             Just old | skip ->
                 return $ RunResult ChangedNothing old $ decode' old
             _ -> do
