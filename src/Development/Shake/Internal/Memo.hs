@@ -40,7 +40,7 @@ import Development.Shake.Internal.Value
 -- The example below caches the output of @gcc@:
 --
 -- @
--- "*.o" %> \\f -> memoFiles "gcc" [f] $ cmd "gcc -c" [f -\<.\> "c"]
+-- "*.o" %> \\f -> (() <$ (memoFiles "gcc" [f] $ cmd_ "gcc -c" [f -\<.\> "c"]))
 -- @
 --
 -- Alternatively, you can use the `Development.Shake.Command.Capture` option

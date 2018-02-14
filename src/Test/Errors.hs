@@ -16,6 +16,7 @@ import System.Directory as IO
 import System.Time.Extra
 import qualified System.IO.Extra as IO
 import Data.Functor
+import General.Binary
 import Prelude
 
 data Args = Die deriving (Eq,Enum,Bounded,Show)
@@ -25,6 +26,10 @@ type instance RuleResult BadBinary = BadBinary
 instance Binary BadBinary where
     put (BadBinary x) = put x
     get = do x <- get; if x == "bad" then error "get: BadBinary \"bad\"" else return $ BadBinary x
+
+instance BinaryEx BadBinary where
+    putEx (BadBinary x) = putEx x
+    getEx = do x <- getEx; if x == "bad" then error "get: BadBinary \"bad\"" else return $ BadBinary x
 
 main = shakeTest test optionsEnum $ \args -> do
     "norule" %> \_ ->

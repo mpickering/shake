@@ -11,8 +11,9 @@ import Control.Exception
 import System.Directory as IO
 import System.Info.Extra
 import Control.Monad.Extra
+import General.Binary
 
-newtype Zero = Zero () deriving (Eq, Show, NFData, Typeable, Hashable, Binary)
+newtype Zero = Zero () deriving (Eq, Show, NFData, Typeable, Hashable, Binary, BinaryEx)
 
 type instance RuleResult Zero = Zero
 

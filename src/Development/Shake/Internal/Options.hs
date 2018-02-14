@@ -234,6 +234,7 @@ instance Show ShakeOptions where
                 | Just x <- cast x = show (x :: Hidden (Verbosity -> String -> IO ()))
                 | Just x <- cast x = show (x :: Hidden (Map.HashMap TypeRep Dynamic))
                 | Just x <- cast x = show (x :: [CmdOption])
+                | Just x <- cast x = show (x ::  Hidden ([Char] -> [Char] -> [[Char]] -> IO ()))
                 | otherwise = error $ "Error while showing ShakeOptions, missing alternative for " ++ show (typeOf x)
 
 
