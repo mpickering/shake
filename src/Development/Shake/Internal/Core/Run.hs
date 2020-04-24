@@ -94,9 +94,9 @@ reset :: RunState -> IO ()
 reset RunState{..} = runLocked database $
     modifyAllMem database f
     where
-        f (Ready r) = Loaded (snd <$> r)
-        f (Failed _ x) = maybe Missing Loaded x
-        f (Running _ x) = maybe Missing Loaded x -- shouldn't ever happen, but Loaded is least worst
+        f (Ready r) = Loaded (Just (fst . result $ r)) (snd <$> r)
+        f (Failed m _ x) = maybe (Missing m) (Loaded m) x
+        f (Running m _ x) = maybe (Missing m) (Loaded m) x -- shouldn't ever happen, but Loaded is least worst
         f x = x
 
 
@@ -275,7 +275,7 @@ liveFiles database = do
 errorsState :: RunState -> IO [(String, SomeException)]
 errorsState RunState{..} = do
     status <- getKeyValues database
-    pure [(show k, e) | (k, Failed e _) <- status]
+    pure [(show k, e) | (k, Failed _ e _) <- status]
 
 
 checkValid :: (IO String -> IO ()) -> Database -> (Key -> Value -> IO (Maybe String)) -> [(Key, Key)] -> IO ()
@@ -324,7 +324,7 @@ usingDatabase cleanup opts diagnostic owitness = do
         | (t,(version, BinaryOp{..})) <- step : root : Map.toList (Map.map (\BuiltinRule{..} -> (builtinVersion, builtinKey)) owitness)]
     (status, journal) <- usingStorage cleanup opts diagnostic witness
     journal<- pure $ \i k v -> journal (QTypeRep $ typeKey k) i (k, v)
-    createDatabase status journal Missing
+    createDatabase status journal (Missing Nothing)
 
 
 incrementStep :: Database -> IO Step
@@ -332,11 +332,11 @@ incrementStep db = runLocked db $ do
     stepId <- mkId db stepKey
     v <- liftIO $ getKeyValueFromId db stepId
     step<- pure $ case v of
-        Just (_, Loaded r) -> incStep $ fromStepResult r
+        Just (_, Loaded _ r) -> incStep $ fromStepResult r
         _ -> Step 1
     let stepRes = toStepResult step
     setMem db stepId stepKey $ Ready stepRes
-    liftIO $ setDisk db stepId stepKey $ Loaded $ fmap snd stepRes
+    liftIO $ setDisk db stepId stepKey $ Loaded Nothing $ fmap snd stepRes
     pure step
 
 toStepResult :: Step -> Result (Value, BS_Store)
@@ -358,7 +358,7 @@ recordRoot step locals (doubleToFloat -> end) db = runLocked db $ do
             ,execution = 0
             ,traces = reverse $ Trace BS.empty end end : localTraces local}
     setMem db rootId rootKey $ Ready rootRes
-    liftIO $ setDisk db rootId rootKey $ Loaded $ fmap snd rootRes
+    liftIO $ setDisk db rootId rootKey $ Loaded Nothing $ fmap snd rootRes
 
 
 loadSharedCloud :: DatabasePoly k v -> ShakeOptions -> Map.HashMap TypeRep BuiltinRule -> IO (Maybe Shared, Maybe Cloud)
@@ -380,7 +380,7 @@ loadSharedCloud var opts owitness = do
 
 
 putDatabase :: (Key -> Builder) -> ((Key, Status) -> Builder)
-putDatabase putKey (key, Loaded (Result x1 x2 x3 x4 x5 x6)) =
+putDatabase putKey (key, Loaded _ (Result x1 x2 x3 x4 x5 x6)) =
     putExN (putKey key) <> putExN (putEx x1) <> putEx x2 <> putEx x3 <> putEx x5 <> putExN (putEx x4) <> putEx x6
 putDatabase _ (_, x) = throwImpure $ errorInternal $ "putWith, Cannot write Status with constructor " ++ statusType x
 
@@ -391,4 +391,4 @@ getDatabase getKey bs
     , (x1, bs) <- getExN bs
     , (x2, x3, x5, bs) <- binarySplit3 bs
     , (x4, x6) <- getExN bs
-    = (getKey key, Loaded (Result x1 x2 x3 (getEx x4) x5 (getEx x6)))
+    = (getKey key, Loaded Nothing (Result x1 x2 x3 (getEx x4) x5 (getEx x6)))

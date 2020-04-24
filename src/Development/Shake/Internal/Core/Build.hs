@@ -3,7 +3,7 @@
 {-# LANGUAGE Rank2Types, ConstraintKinds, TupleSections, ViewPatterns #-}
 
 module Development.Shake.Internal.Core.Build(
-    getDatabaseValue, getDatabaseValueGeneric,
+    getDatabaseValue, getDatabaseValueGeneric, getDatabaseValueStale,
     historyIsEnabled, historySave, historyLoad,
     applyKeyValue,
     apply, apply1,
@@ -51,7 +51,8 @@ setIdKeyStatus Global{..} db i k v = do
                 Ready r -> Just $ "    = " ++ showBracket (result r) ++ " " ++ (if built r == changed r then "(changed)" else "(unchanged)")
                 _ -> Nothing
         pure $ changeStatus ++ maybe "" ("\n" ++) changeValue
-    setMem db i k v
+    old <- fmap snd <$> (liftIO $ getKeyValueFromId db i)
+    setMem db i k (setOldResult (getStaleResult =<< old) v)
 
 
 ---------------------------------------------------------------------
@@ -67,6 +68,16 @@ getDatabaseValueGeneric k = do
     Just status <- liftIO $ getValueFromKey globalDatabase k
     pure $ getResult status
 
+-- | Looks up a key in the database and returns the last value the key
+-- successfully computed.
+getDatabaseValueStale  :: ((Partial, RuleResult key ~ value, ShakeValue key, Typeable value)) => key -> Action (Maybe value)
+getDatabaseValueStale k = do
+    Global{..} <- Action getRO
+    status <- (getStaleResult =<<) <$> (liftIO $ getValueFromKey globalDatabase (newKey k))
+    case status of
+      Just v -> return $ Just (fromValue v)
+      _ -> return Nothing
+
 
 ---------------------------------------------------------------------
 -- NEW STYLE PRIMITIVES
@@ -79,18 +90,18 @@ lookupOne global stack database i = do
         Nothing -> Now $ Left $ errorStructured "Shake Id no longer exists" [("Id", Just $ show i)] ""
         Just (k, s) -> case s of
             Ready r -> Now $ Right r
-            Failed e _ -> Now $ Left e
+            Failed _ e _ -> Now $ Left e
             Running{} | Left e <- addStack i k stack -> Now $ Left e
             _ -> Later $ \continue -> do
                 Just (_, s) <- liftIO $ getKeyValueFromId database i
                 case s of
                     Ready r -> continue $ Right r
-                    Failed e _ -> continue $ Left e
-                    Running (NoShow w) r -> do
+                    Failed _ e _ -> continue $ Left e
+                    Running m (NoShow w) r -> do
                         let w2 v = w v >> continue v
-                        setMem database i k $ Running (NoShow w2) r
-                    Loaded r -> buildOne global stack database i k (Just r) `fromLater` continue
-                    Missing -> buildOne global stack database i k Nothing `fromLater` continue
+                        setMem database i k $ Running m (NoShow w2) r
+                    Loaded _ r -> buildOne global stack database i k (Just r) `fromLater` continue
+                    Missing _ -> buildOne global stack database i k Nothing `fromLater` continue
 
 
 -- | Build a key, must currently be either Loaded or Missing, changes to Waiting
@@ -100,7 +111,7 @@ buildOne global@Global{..} stack database i k r = case addStack i k stack of
         quickly $ setIdKeyStatus global database i k $ mkError e
         pure $ Left e
     Right stack -> Later $ \continue -> do
-        setIdKeyStatus global database i k (Running (NoShow continue) r)
+        setIdKeyStatus global database i k (Running Nothing (NoShow continue) r)
         let go = buildRunMode global stack database r
             priority = case r of
               Nothing -> PoolStart
@@ -111,21 +122,21 @@ buildOne global@Global{..} stack database i k r = case addStack i k stack of
                     let val = fmap runValue res
                     res <- liftIO $ getKeyValueFromId database i
                     w <- case res of
-                        Just (_, Running (NoShow w) _) -> pure w
+                        Just (_, Running _m (NoShow w) _) -> pure w
                         -- We used to be able to hit here, but we fixed it by ensuring the thread pool workers are all
                         -- dead _before_ any exception bubbles up
                         _ -> throwM $ errorInternal $ "expected Waiting but got " ++ maybe "nothing" (statusType . snd) res ++ ", key " ++ show k
                     setIdKeyStatus global database i k $ either mkError Ready val
                     w val
                 case res of
-                    Right RunResult{..} | runChanged /= ChangedNothing -> setDisk database i k $ Loaded runValue{result=runStore}
+                    Right RunResult{..} | runChanged /= ChangedNothing -> setDisk database i k $ Loaded Nothing runValue{result=runStore}
                     _ -> pure ()
     where
-        mkError e = Failed e $ if globalOneShot then Nothing else r
+        mkError e = Failed Nothing e $ if globalOneShot then Nothing else r
 
 
 -- | Compute the value for a given RunMode and a restore function to run
-buildRunMode :: Global -> Stack -> Database -> Maybe (Result a) -> Wait Locked RunMode
+buildRunMode ::  (Typeable a, Show a, NFData a) => Global -> Stack -> Database -> Maybe (Result a) -> Wait Locked RunMode
 buildRunMode global stack database me = do
     changed <- case me of
         Nothing -> pure True
@@ -134,7 +145,7 @@ buildRunMode global stack database me = do
 
 
 -- | Have the dependencies changed
-buildRunDependenciesChanged :: Global -> Stack -> Database -> Result a -> Wait Locked Bool
+buildRunDependenciesChanged ::  (Typeable a, Show a, NFData a) => Global -> Stack -> Database -> Result a -> Wait Locked Bool
 buildRunDependenciesChanged global stack database me = isJust <$> firstJustM id
     [firstJustWaitUnordered (fmap test . lookupOne global stack database) x | Depends x <- depends me]
     where

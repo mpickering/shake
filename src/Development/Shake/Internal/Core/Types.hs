@@ -9,7 +9,7 @@ module Development.Shake.Internal.Core.Types(
     BuiltinRule(..), Global(..), Local(..), Action(..), runAction, addDiscount,
     newLocal, localClearMutable, localMergeMutable,
     Stack, Step(..), Result(..), Database, DatabasePoly(..), Depends(..), Status(..), Trace(..), BS_Store,
-    getResult, exceptionStack, statusType, addStack, addCallStack,
+    getResult, getStaleResult, setOldResult, exceptionStack, statusType, addStack, addCallStack,
     incStep, newTrace, nubDepends, emptyStack, topStack, showTopStack,
     stepKey, StepKey(..),
     rootKey, Root(..)
@@ -216,19 +216,19 @@ type OneShot a = a
 
 data Status
     = Ready (Result (Value, OneShot BS_Store)) -- ^ I have a value
-    | Failed SomeException (OneShot (Maybe (Result BS_Store))) -- ^ I have been run and raised an error
-    | Loaded (Result BS_Store) -- ^ Loaded from the database
-    | Running (NoShow (Either SomeException (Result (Value, BS_Store)) -> Locked ())) (Maybe (Result BS_Store)) -- ^ Currently in the process of being checked or built
-    | Missing -- ^ I am only here because I got into the Intern table
+    | Failed (Maybe Value) SomeException (OneShot (Maybe (Result BS_Store))) -- ^ I have been run and raised an error
+    | Loaded (Maybe Value) (Result BS_Store) -- ^ Loaded from the database
+    | Running (Maybe Value) (NoShow (Either SomeException (Result (Value, BS_Store)) -> Locked ())) (Maybe (Result BS_Store)) -- ^ Currently in the process of being checked or built
+    | Missing (Maybe Value) -- ^ I am only here because I got into the Intern table
       deriving Show
 
 instance NFData Status where
     rnf x = case x of
         Ready x -> rnf x
-        Failed x y -> rnfException x `seq` rnf y
-        Loaded x -> rnf x
-        Running _ x -> rnf x -- Can't RNF a waiting, but also unnecessary
-        Missing -> ()
+        Failed _ x y -> rnfException x `seq` rnf y
+        Loaded _ x -> rnf x
+        Running _ _ x -> rnf x -- Can't RNF a waiting, but also unnecessary
+        Missing _ -> ()
         where
             -- best we can do for an arbitrary exception
             rnfException = rnf . show
@@ -256,9 +256,23 @@ statusType Missing{} = "Missing"
 
 getResult :: Status -> Maybe (Result (Either BS_Store Value))
 getResult (Ready r) = Just $ Right . fst <$> r
-getResult (Loaded r) = Just $ Left <$> r
-getResult (Running _ r) = fmap Left <$> r
+getResult (Loaded _ r) = Just $ Left <$> r
+getResult (Running _ _ r) = fmap Left <$> r
 getResult _ = Nothing
+
+getStaleResult :: Status -> Maybe Value
+getStaleResult (Ready r) = Just (fst . result $ r)
+getStaleResult (Loaded m _r) = m
+getStaleResult (Running m _ r) = m
+getStaleResult (Failed m _ _)  = m
+getStaleResult (Missing m) = m
+
+setOldResult :: Maybe Value -> Status -> Status
+setOldResult mv (Running _ a b) = Running mv a b
+setOldResult mv (Failed _ a b)  = Failed mv a b
+setOldResult mv (Loaded _ r)  = Loaded mv r
+setOldResult mv (Missing _) = Missing mv
+setOldResult _ s = s
 
 
 ---------------------------------------------------------------------

@@ -23,7 +23,8 @@ module Development.Shake.Database(
     shakeLiveFilesDatabase,
     shakeProfileDatabase,
     shakeErrorsDatabase,
-    shakeRunAfter
+    shakeRunAfter,
+    getDatabaseValueStale
     ) where
 
 import Control.Concurrent.Extra
@@ -36,6 +37,7 @@ import Development.Shake.Internal.Errors
 import Development.Shake.Internal.Options
 import Development.Shake.Internal.Core.Rules
 import Development.Shake.Internal.Core.Run
+import Development.Shake.Internal.Core.Build
 import Development.Shake.Internal.Core.Types
 import Development.Shake.Internal.Rules.Default
 
