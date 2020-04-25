@@ -59,16 +59,6 @@ import Prelude
 ---------------------------------------------------------------------
 -- MAKE
 
-data RunState = RunState
-    {opts :: ShakeOptions
-    ,builtinRules :: Map.HashMap TypeRep BuiltinRule
-    ,userRules :: TMap.Map UserRuleVersioned
-    ,database :: Database
-    ,curdir :: FilePath
-    ,shared :: Maybe Shared
-    ,cloud :: Maybe Cloud
-    ,actions :: [(Stack, Action ())]
-    }
 
 
 open :: Cleanup -> ShakeOptions -> Rules () -> IO RunState
@@ -100,7 +90,7 @@ reset RunState{..} = runLocked database $
         f x = x
 
 
-run :: RunState -> Bool -> [Action ()] -> IO [IO ()]
+run :: RunState -> Bool -> [Action ()] -> IO [ShakeDatabase -> IO ()]
 run RunState{..} oneshot actions2 =
     withInit opts $ \opts@ShakeOptions{..} diagnostic output -> do
 

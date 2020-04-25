@@ -4,7 +4,7 @@
 
 module Development.Shake.Internal.Core.Types(
     BuiltinRun, BuiltinLint, BuiltinIdentity,
-    RunMode(..), RunResult(..), RunChanged(..),
+    RunMode(..), RunResult(..), RunChanged(..), RunState(..), UseState(..), ShakeDatabase(..),
     UserRule(..), UserRuleVersioned(..), userRuleSize,
     BuiltinRule(..), Global(..), Local(..), Action(..), runAction, addDiscount,
     newLocal, localClearMutable, localMergeMutable,
@@ -47,6 +47,7 @@ import Development.Shake.Internal.Options
 import Development.Shake.Classes
 import Data.Semigroup
 import General.Cleanup
+import Control.Concurrent.Extra
 import Prelude
 
 #if __GLASGOW_HASKELL__ >= 800 && __GLASGOW_HASKELL__ < 808
@@ -389,6 +390,27 @@ userRuleSize (Priority _ x) = userRuleSize x
 userRuleSize (Alternative x) = userRuleSize x
 userRuleSize (Versioned _ x) = userRuleSize x
 
+data UseState
+    = Closed
+    | Using String
+    | Open {openOneShot :: Bool, openRequiresReset :: Bool}
+
+-- | The type of an open Shake database. Created with
+--   'shakeOpenDatabase' or 'shakeWithDatabase'. Used with
+--   'shakeRunDatabase'. You may not execute simultaneous calls using 'ShakeDatabase'
+--   on separate threads (it will raise an error).
+data ShakeDatabase = ShakeDatabase (Var UseState) RunState
+
+data RunState = RunState
+    {opts :: ShakeOptions
+    ,builtinRules :: Map.HashMap TypeRep BuiltinRule
+    ,userRules :: TMap.Map UserRuleVersioned
+    ,database :: Database
+    ,curdir :: FilePath
+    ,shared :: Maybe Shared
+    ,cloud :: Maybe Cloud
+    ,actions :: [(Stack, Action ())]
+    }
 
 type Database = DatabasePoly Key Status
 
@@ -404,7 +426,7 @@ data Global = Global
     ,globalOptions  :: ShakeOptions -- ^ Shake options
     ,globalDiagnostic :: IO String -> IO () -- ^ Debugging function
     ,globalRuleFinished :: Key -> Action () -- ^ actions to run after each rule
-    ,globalAfter :: IORef [IO ()] -- ^ Operations to run on success, e.g. removeFilesAfter
+    ,globalAfter :: IORef [ShakeDatabase -> IO ()]
     ,globalTrackAbsent :: IORef [(Key, Key)] -- ^ Tracked things, in rule fst, snd must be absent
     ,globalProgress :: IO Progress -- ^ Request current progress state
     ,globalUserRules :: TMap.Map UserRuleVersioned

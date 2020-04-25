@@ -40,16 +40,6 @@ import Development.Shake.Internal.Core.Types
 import Development.Shake.Internal.Rules.Default
 
 
-data UseState
-    = Closed
-    | Using String
-    | Open {openOneShot :: Bool, openRequiresReset :: Bool}
-
--- | The type of an open Shake database. Created with
---   'shakeOpenDatabase' or 'shakeWithDatabase'. Used with
---   'shakeRunDatabase'. You may not execute simultaneous calls using 'ShakeDatabase'
---   on separate threads (it will raise an error).
-data ShakeDatabase = ShakeDatabase (Var UseState) RunState
 
 -- | Given some options and rules, return a pair. The first component opens the database,
 --   the second cleans it up. The creation /does not/ need to be run masked, because the
@@ -135,7 +125,7 @@ shakeErrorsDatabase (ShakeDatabase use s) =
 --   actions along with a list of actions to run after the database was closed, as added with
 --   'Development.Shake.runAfter' and 'Development.Shake.removeFilesAfter'.
 shakeRunDatabase :: ShakeDatabase -> [Action a] -> IO ([a], [IO ()])
-shakeRunDatabase (ShakeDatabase use s) as =
+shakeRunDatabase sd@(ShakeDatabase use s) as =
     withOpen use "shakeRunDatabase" (\o -> o{openRequiresReset=True}) $ \Open{..} -> do
         when openRequiresReset $ do
             when openOneShot $
@@ -147,5 +137,5 @@ shakeRunDatabase (ShakeDatabase use s) as =
         after <- run s openOneShot $ map void as
         results <- mapM readIORef refs
         case sequence results of
-            Just result -> pure (result, after)
+            Just result -> pure (result, map ($ sd) after)
             Nothing -> throwM $ errorInternal "Expected all results were written, but some where not"

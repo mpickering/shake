@@ -48,7 +48,7 @@ import Prelude
 
 import Development.Shake.Internal.CmdOption
 import Development.Shake.Internal.Core.Action
-import Development.Shake.Internal.Core.Types hiding (Result)
+import Development.Shake.Internal.Core.Types hiding (Result, RunState(..))
 import Development.Shake.FilePath
 import Development.Shake.Internal.Options
 import Development.Shake.Internal.Rules.File

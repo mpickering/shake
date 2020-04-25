@@ -46,7 +46,7 @@ import Prelude
 import Control.Monad.Fail
 #endif
 
-import Development.Shake.Internal.Core.Types
+import Development.Shake.Internal.Core.Types hiding (RunState(..))
 import Development.Shake.Internal.Core.Monad
 import Development.Shake.Internal.Value
 import Development.Shake.Internal.Options

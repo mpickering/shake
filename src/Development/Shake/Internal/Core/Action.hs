@@ -2,7 +2,7 @@
 
 module Development.Shake.Internal.Core.Action(
     actionOnException, actionFinally, actionBracket, actionCatch, actionRetry,
-    getShakeOptions, getProgress, runAfter,
+    getShakeOptions, getProgress, runAfter, runAfterDB,
     lintTrackRead, lintTrackWrite, lintTrackAllow,
     getVerbosity, putWhen, putVerbose, putInfo, putWarn, putError, withVerbosity, quietly,
     orderOnlyAction,
@@ -151,6 +151,12 @@ getProgress = do
 -- | Specify an action to be run after the database has been closed, if building completes successfully.
 runAfter :: IO () -> Action ()
 runAfter op = do
+    Global{..} <- Action getRO
+    liftIO $ atomicModifyIORef_ globalAfter (const op :)
+
+-- | Specify an action to be run after the database has been closed, if building completes successfully.
+runAfterDB :: (ShakeDatabase -> IO ()) -> Action ()
+runAfterDB op = do
     Global{..} <- Action getRO
     liftIO $ atomicModifyIORef_ globalAfter (op:)
 
